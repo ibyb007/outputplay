@@ -3,17 +3,14 @@ import os
 import requests
 from datetime import datetime
 
-# Fetch from GitHub secret only
-JSON_URL = os.getenv("JSON_SOURCE_URL")
-if not JSON_URL:
-    raise ValueError("JSON_SOURCE_URL not set in repo secrets!")
+# All config from GitHub secrets/env
+JSON_URL    = os.getenv("JSON_SOURCE_URL")
+GIST_TOKEN  = os.getenv("GIST_TOKEN")
+GIST_ID     = os.getenv("OUTPUT_GIST_ID")
+GIST_FILE   = "playlist.m3u"   # must match the filename in your Gist
 
-GIST_TOKEN = os.getenv("GIST_TOKEN")
-if not GIST_TOKEN:
-    raise ValueError("GIST_TOKEN not set in repo secrets!")
-
-GIST_ID_FILE = ".gist_id"          # File in repo to persist the created gist ID
-GIST_FILE_NAME = "playlist.m3u"    # Name of the file inside the Gist
+if not JSON_URL or not GIST_TOKEN or not GIST_ID:
+    raise ValueError("Missing required env vars: JSON_SOURCE_URL, GIST_TOKEN, OUTPUT_GIST_ID")
 
 M3U_HEADER = """#EXTM3U x-tvg-url=""
 #EXTM3U
@@ -68,79 +65,38 @@ def generate_m3u(channels):
         lines.extend([extinf, kodiprop1, kodiprop2, vlcopt, exthttp, stream_url, ""])
 
     if len(lines) < 5:
-        raise ValueError("No valid channels generated")
+        raise ValueError("No valid channels generated - check JSON format")
 
     return "\n".join(lines)
 
-def get_or_create_gist_id():
-    headers = {
-        "Authorization": f"token {GIST_TOKEN}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-
-    # Check if we already have a saved ID
-    if os.path.exists(GIST_ID_FILE):
-        with open(GIST_ID_FILE, "r") as f:
-            gist_id = f.read().strip()
-        if gist_id:
-            # Quick validation: try to get the gist
-            r = requests.get(f"https://api.github.com/gists/{gist_id}", headers=headers)
-            if r.status_code == 200:
-                print(f"Using existing Gist ID: {gist_id}")
-                return gist_id
-
-    # Create new private Gist
-    print("Creating new private Gist...")
-    payload = {
-        "description": "Auto-generated JioTV M3U Playlist",
-        "public": False,
-        "files": {
-            GIST_FILE_NAME: {"content": "# Placeholder - will be updated soon"}
-        }
-    }
-    r = requests.post("https://api.github.com/gists", headers=headers, json=payload)
-    r.raise_for_status()
-    data = r.json()
-    new_id = data["id"]
-    print(f"Created new Gist: {new_id}")
-
-    # Save ID to file for next runs
-    with open(GIST_ID_FILE, "w") as f:
-        f.write(new_id)
-
-    return new_id
-
-def update_gist(gist_id, m3u_content):
+def update_gist(m3u_content):
     headers = {
         "Authorization": f"token {GIST_TOKEN}",
         "Accept": "application/vnd.github.v3+json"
     }
     payload = {
         "files": {
-            GIST_FILE_NAME: {"content": m3u_content}
+            GIST_FILE: {"content": m3u_content}
         }
     }
-    r = requests.patch(f"https://api.github.com/gists/{gist_id}", headers=headers, json=payload)
+    url = f"https://api.github.com/gists/{GIST_ID}"
+    r = requests.patch(url, headers=headers, json=payload)
     r.raise_for_status()
-    print(f"Gist updated successfully: https://gist.github.com/{gist_id}")
+    print(f"Gist updated: https://gist.github.com/{GIST_ID}")
+    print(f"Raw URL: https://gist.githubusercontent.com/raw/{GIST_ID}/{GIST_FILE}")
 
 def main():
+    print(f"Fetching channels from: {JSON_URL}")
     resp = requests.get(JSON_URL, timeout=20)
     resp.raise_for_status()
     data = resp.json()
 
     channels = data if isinstance(data, list) else data.get("channels", [])
     if not channels:
-        raise ValueError("No channels found in JSON")
+        raise ValueError("No channels list found in JSON")
 
     m3u_content = generate_m3u(channels)
-
-    gist_id = get_or_create_gist_id()
-    update_gist(gist_id, m3u_content)
-
-    # Optional: print raw URL for convenience
-    raw_url = f"https://gist.githubusercontent.com/raw/{gist_id}/{GIST_FILE_NAME}"
-    print(f"Raw playlist URL: {raw_url}")
+    update_gist(m3u_content)
 
 if __name__ == "__main__":
     main()
