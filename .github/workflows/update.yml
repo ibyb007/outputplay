@@ -1,0 +1,56 @@
+name: Update JioTV M3U Playlist to Private Gist (Auto-create)
+
+on:
+  schedule:
+    # Runs every day at 04:00 UTC (≈ 09:30 IST)
+    - cron: '0 4 * * *'
+
+  # Allows manual triggering from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  generate-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository (needed to read/write files like .gist_id)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Important: fetch full history so we can commit/push changes
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}  # default token has repo write access
+
+      # Step 2: Set up Python environment
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 3: Install required Python packages
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      # Step 4: Run the Python script to generate M3U and handle Gist (create or update)
+      - name: Generate M3U and upload to Gist
+        env:
+          JSON_SOURCE_URL: ${{ secrets.JSON_SOURCE_URL }}
+          GIST_TOKEN:      ${{ secrets.GIST_TOKEN }}
+        run: python convert.py
+
+      # Step 5: Commit and push the .gist_id file if it was created or changed
+      - name: Commit and push .gist_id persistence file
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          
+          # Stage the file if it exists and has changes
+          git add .gist_id || true
+          
+          # Only commit if there are changes
+          git diff --cached --quiet || git commit -m "Update Gist ID persistence file [ci skip]"
+          
+          # Push changes back to the repository
+          git push origin HEAD || echo "No push needed (no changes or already up-to-date)"
