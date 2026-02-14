@@ -59,31 +59,32 @@ jobs:
               print("No channels found")
               exit(1)
 
-          # Expanded exclusion keywords
+          # Exclusion keywords (expanded)
           exclude_patterns = [
-              # Previous regional + devotional + educational
+              # Regional languages
               "tamil", "sun", "vijay", "kalaignar", "raj", "telugu", "gemini", "etv", "maa", "zeetelugu",
               "kannada", "colorskannada", "sudeep", "udaya", "suvarna", "gujarati", "sabgujarati",
               "malayalam", "mazhavil", "surya", "punjabi", "ptc", "mh1", "ziyara",
+              # Devotional & Educational
               "devotional", "bhakti", "santvani", "iskcon", "sadhguru", "astrology", "shri", "ramayan", "mahadev",
               "educational", "gyan", "gyandarshan", "vedanta", "vande", "swayam", "pm e", "evidya", "pm e-vidya", "prabha",
-              # New exclusions
-              "bhojpuri", "zeebhojpuri", "big ganga", "maiboli", "marathi", "dd", "doordarshan", "dd national", "dd news", "dd sports", "dd kisan", "dd retro"
+              # New exclusions: Bhojpuri, Marathi, DD channels
+              "bhojpuri", "zeebhojpuri", "big ganga", "maiboli", "marathi", "dd", "doordarshan", "dd national", "dd news", "dd sports", "dd kisan", "dd retro", "dd bharat", "dd malayalam", "dd odia"
           ]
 
           def get_category(name):
               name_lower = name.lower()
               
-              # Bengali (includes Colors Bangla HD as requested)
-              if any(kw in name_lower for kw in ["bangla", "jalsha", "aath", "ananda", "tv9 bangla", "news18 bangla", "abp ananda", "zee bangla", "star jalsha", "colors bangla", "24 ghanta"]):
+              # Bengali (includes Colors Bengali HD)
+              if any(kw in name_lower for kw in ["bangla", "jalsha", "aath", "ananda", "tv9 bangla", "news18 bangla", "abp ananda", "zee bangla", "star jalsha", "colors bangla", "colors bengali", "24 ghanta"]):
                   return "Bengali"
               
               # Assamese
               if any(kw in name_lower for kw in ["assam", "dy 365", "news18 assam", "prag news", "rang", "jonack", "rengoni", "pratidin time", "time8", "north east"]):
                   return "Assamese"
               
-              # Kids (new category)
-              if any(kw in name_lower for kw in ["nick", "nickelodeon", "cartoon network", "pogo", "hungama", "disney", "sonic", "discovery kids", "cartoonito", "toonami", "baby tv", "jetix"]):
+              # Kids (new group)
+              if any(kw in name_lower for kw in ["nick", "nickelodeon", "cartoon network", "pogo", "hungama", "disney", "sonic", "discovery kids", "cartoonito", "toonami", "baby tv", "jetix", "toon gyan"]):
                   return "Kids"
               
               # Sports (single group)
@@ -106,9 +107,9 @@ jobs:
               if any(kw in name_lower for kw in ["bbc world", "cnn", "bloomberg", "cnbc", "fox news", "al jazeera"]):
                   return "English News"
               
-              # Infotainment (renamed + moved Nat Geo, History HD, Discovery Science)
+              # Infotainment (renamed + Nat Geo, History HD, Discovery Science moved here)
               if any(kw in name_lower for kw in ["discovery", "nat geo", "national geographic", "history", "history hd", "animal planet", "travelxp", "tlc", "discovery science"]):
-                  return "Infotainment"
+                  return "Infotainment "
               
               # Music
               if any(kw in name_lower for kw in ["9xm", "mastiii", "mtv", "zoom", "bindass", "music india", "shemaroo umang"]):
