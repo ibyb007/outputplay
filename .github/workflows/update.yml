@@ -2,9 +2,9 @@ name: Update Filtered & Categorized JTV M3U → Private Gist
 
 on:
   schedule:
-    - cron: '0 4 * * *'           # daily
+    - cron: '10 */3 * * *'      # Every 3 hours at :10 past the hour (UTC)
 
-  workflow_dispatch:
+  workflow_dispatch:            # Manual trigger from Actions tab
 
 jobs:
   generate-and-update:
@@ -42,47 +42,85 @@ jobs:
           USER_AGENT = "plaYtv/7.1.3 (Linux;Android 13) ygx/824.1 ExoPlayerLib/824.0"
 
           if not all([SOURCE_URL, GIST_TOKEN, GIST_ID]):
-              print("Missing secrets")
+              print("Missing required secrets: SOURCE_URL, GIST_TOKEN or GIST_ID")
               exit(1)
 
-          # Fetch JSON
-          resp = requests.get(SOURCE_URL, timeout=20)
-          resp.raise_for_status()
-          data = resp.json()
-          channels = data if isinstance(data, list) else data.get("channels", []) or []
+          print(f"Fetching from {SOURCE_URL}")
+          try:
+              resp = requests.get(SOURCE_URL, timeout=20)
+              resp.raise_for_status()
+              data = resp.json()
+              channels = data if isinstance(data, list) else data.get("channels", []) or data.get("data", []) or []
+          except Exception as e:
+              print(f"Fetch/parse error: {e}")
+              exit(1)
+
+          if not channels:
+              print("No channels found in response")
+              exit(1)
 
           # Exclusion keywords (case-insensitive)
           exclude_patterns = [
+              # Regional languages
               "tamil", "sun", "vijay", "kalaignar", "raj", "telugu", "gemini", "etv", "maa", "zeetelugu",
               "kannada", "colorskannada", "sudeep", "udaya", "suvarna", "gujarati", "sabgujarati",
               "malayalam", "mazhavil", "surya", "punjabi", "ptc", "mh1", "ziyara",
-              "educational", "gyan", "gyandarshan", "vedanta", "devotional", "sadhguru", "astrology",
-              "bhakti", "santvani", "divya", "iskcon", "shri", "ramayan", "mahadev"
+              # Devotional & Educational
+              "devotional", "bhakti", "santvani", "iskcon", "sadhguru", "astrology", "shri", "ramayan", "mahadev",
+              "educational", "gyan", "gyandarshan", "vedanta", "vande", "swayam", "pm e", "evidya", "pm e-vidya", "prabha"
           ]
 
-          # Category mapping functions (based on PDF structure)
           def get_category(name):
               name_lower = name.lower()
-              if any(kw in name_lower for kw in ["star", "colors", "sony", "zee", "sab", "&tv", "big magic", "rishtey", "shemaroo", "dangal", "bollywood", "cineplex", "max", "gold"]):
-                  return "Hindi Entertainment & Movies"
-              if any(kw in name_lower for kw in ["aaj tak", "abp", "india today", "news18", "republic", "ndtv", "times now", "zee news", "bharat", "sudarshan", "tv9"]):
-                  return "Hindi News"
+              
+              if any(kw in name_lower for kw in ["bangla", "jalsha", "aath", "ananda", "tv9 bangla", "news18 bangla", "abp ananda", "zee bangla", "star jalsha", "colors bangla", "24 ghanta"]):
+                  return "Bengali"
+              
+              if any(kw in name_lower for kw in ["assam", "dy 365", "news18 assam", "prag news", "rang", "jonack", "rengoni", "pratidin time", "time8", "north east"]):
+                  return "Assamese"
+              
               if any(kw in name_lower for kw in ["sports", "star sports", "sony six", "ten", "willow", "espn", "sports18", "cricket", "football", "jiofootball"]):
                   return "Sports"
-              if any(kw in name_lower for kw in ["discovery", "nat geo", "history", "animal planet", "travelxp", "fox life"]):
+              
+              # Hindi Entertainment
+              if any(kw in name_lower for kw in ["star plus", "colors", "sony sab", "zee tv", "&tv", "big magic", "rishtey", "shemaroo", "dangal tv", "sony pal", "zee anmol", "star utsav", "zee smile", "sony wah"]):
+                  return "Entertainment"
+              
+              # English Entertainment
+              if any(kw in name_lower for kw in ["star world", "fox life", "axn", "comedy central", "mtv", "sony pix", "hbo", "wb", "universal tv", "paramount", "discovery science"]):
+                  return "Entertainment"
+              
+              # Hindi Movies
+              if any(kw in name_lower for kw in ["zee cinema", "sony max", "star gold", "colors cineplex", "zee anmol cinema", "cineplex bollywood", "sony wah cinema", "&pictures", "zee action", "goldmines", "b4u movies", "moviemax"]):
+                  return "Movies"
+              
+              # English Movies
+              if any(kw in name_lower for kw in ["sony pix", "hbo", "wb", "movies ok", "movies now", "star movies", "cinema world", "fox action movies"]):
+                  return "Movies"
+              
+              # Hindi News
+              if any(kw in name_lower for kw in ["aaj tak", "abp news", "india today", "news18", "republic bharat", "ndtv india", "times now", "zee news", "india tv", "cnn news18"]):
+                  return "Hindi News"
+              
+              # English / International News
+              if any(kw in name_lower for kw in ["bbc world", "cnn", "bloomberg", "cnbc", "fox news", "al jazeera"]):
+                  return "English News"
+              
+              # Infotainment / Lifestyle
+              if any(kw in name_lower for kw in ["discovery", "nat geo", "history tv18", "animal planet", "travelxp", "fox life", "tlc"]):
                   return "Infotainment / Lifestyle"
-              if any(kw in name_lower for kw in ["bbc", "cnn", "bloomberg", "cnbc", "fox", "al jazeera", "english"]):
-                  return "English / International"
-              if "music" in name_lower or "mtv" in name_lower or "9xm" in name_lower:
+              
+              # Music
+              if any(kw in name_lower for kw in ["9xm", "mastiii", "mtv", "zoom", "bindass", "music india", "shemaroo umang"]):
                   return "Music"
+              
               return "Others / General"
 
-          # Build M3U with categories as group-title
           lines = [
               "#EXTM3U",
               f"# Generated {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} from {SOURCE_URL}",
-              "# Filtered: excluded Tamil/Telugu/Kannada/Gujarati/Malayalam/Punjabi/Educational/Devotional",
-              "# Categorized per Jio channel guide patterns"
+              "# Excluded: Tamil/Telugu/Kannada/Gujarati/Malayalam/Punjabi/Devotional/Educational (incl. Vande, Swayam, PM e-Vidya)",
+              "# Groups: Bengali, Assamese, Entertainment (Hindi+English series), Movies (Hindi+English films), Sports (single)"
           ]
 
           shared_cookie = None
@@ -92,7 +130,6 @@ jobs:
               name = ch.get("name") or ch.get("title") or "Unknown"
               name_lower = name.lower()
 
-              # Skip excluded channels
               if any(pat in name_lower for pat in exclude_patterns):
                   continue
 
@@ -137,7 +174,7 @@ jobs:
 
           m3u_content = "\n".join(lines)
 
-          # Upload to private Gist
+          # Update private Gist
           headers = {
               "Authorization": f"token {GIST_TOKEN}",
               "Accept": "application/vnd.github+json"
@@ -152,12 +189,12 @@ jobs:
 
           if r.status_code == 200:
               raw = f"https://gist.githubusercontent.com/raw/{GIST_ID}/{OUTPUT_FILE_NAME}"
-              print(f"Success! Updated Gist. Raw URL: {raw}")
-              print(f"Channels after filter: {processed_count}")
+              print(f"Success! Updated Gist. Channels processed: {processed_count}")
+              print(f"Raw URL: {raw}")
           else:
               print(f"Gist update failed ({r.status_code}): {r.text}")
               exit(1)
           EOF
 
-      - name: Log result
-        run: echo "Workflow finished"
+      - name: Log completion
+        run: echo "Workflow completed - jtv.m3u updated in private Gist"
